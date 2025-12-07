@@ -27,7 +27,7 @@ const result = compile(tree.children)
     }), {})
 
 const json = JSON.stringify({
-    _base: 'https://raw.githubusercontent.com/cephasteom/samples/',
+    _base: 'https://raw.githubusercontent.com/cephasteom/samples/main/',
     ...result
 });
 
