@@ -26,7 +26,10 @@ const result = compile(tree.children)
         [item.group]: obj[item.group] ? [...obj[item.group], item.url] : [item.url]
     }), {})
 
-const json = JSON.stringify(result);
+const json = JSON.stringify({
+    _base: 'https://raw.githubusercontent.com/cephasteom/samples/',
+    ...result
+});
 
 fs.writeFile('./samples.json', json, 'utf8', (err) => {
     err
