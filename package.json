@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "samplesToJSON.js",
   "scripts": {
-    "compile": "node samplesToJSON.js"
+    "compile": "node samplesToJSON.js",
+    "serve": "node samplesToJSON.js --base http://localhost:3000/ --out localSamples.json && serve . --cors -l 3000"
   },
   "repository": {
     "type": "git",
@@ -18,6 +19,7 @@
   "description": "",
   "dependencies": {
     "directory-tree": "^3.5.2",
-    "fs": "^0.0.1-security"
+    "fs": "^0.0.1-security",
+    "serve": "^14.2.6"
   }
 }

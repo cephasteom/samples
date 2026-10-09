@@ -1,11 +1,27 @@
 const dirTree = require("directory-tree");
 const fs = require('fs');
+
+function parseArgs(argv) {
+    const args = {
+        base: 'https://raw.githubusercontent.com/cephasteom/samples/main/',
+        out: './samples.json',
+    };
+    for (let i = 0; i < argv.length; i += 2) {
+        if (argv[i] === '--base') args.base = argv[i + 1];
+        if (argv[i] === '--out') args.out = argv[i + 1];
+    }
+    return args;
+}
+
+const { base, out } = parseArgs(process.argv.slice(2));
+
 const tree = dirTree("./samples");
 
 function formatItem(name, url) {
     const [, ext] = name.split(".");
-            const group = url.split("/")[url.split("/").length - 2];
-            return ['wav', 'mp3'].includes(ext) 
+            const segments = url.split("/");
+            const group = segments.slice(1, -1).join(".");
+            return ['wav', 'mp3'].includes(ext)
                 ? { group, url }
                 : false;
 }
@@ -27,11 +43,11 @@ const result = compile(tree.children)
     }), {})
 
 const json = JSON.stringify({
-    _base: 'https://raw.githubusercontent.com/cephasteom/samples/main/',
+    _base: base,
     ...result
 });
 
-fs.writeFile('./samples.json', json, 'utf8', (err) => {
+fs.writeFile(out, json, 'utf8', (err) => {
     err
         ? console.log(`Error writing samples file: ${err}`)
         : console.log(`Samples file is written successfully!`);
