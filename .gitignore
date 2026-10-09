@@ -3,5 +3,6 @@ node_modules/
 *.DS_Store
 samplesToProcess/
 .env
+.freesound-token.json
 samples/freesound/
 localSamples.json

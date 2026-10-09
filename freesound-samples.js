@@ -4,6 +4,10 @@ const readline = require('node:readline/promises');
 const { execFileSync } = require('child_process');
 
 const ENV_PATH = path.join(__dirname, '.env');
+const TOKEN_PATH = path.join(__dirname, '.freesound-token.json');
+// the API's maximum page size
+const SEARCH_POOL_SIZE = 150;
+const QUALITY_FILTER = 'type:(wav OR flac) bitdepth:[24 TO *] samplerate:[44100 TO *]';
 
 function loadEnv() {
     try {
@@ -34,13 +38,8 @@ async function authorize(rl, clientId) {
     return (await rl.question('Paste the code here: ')).trim();
 }
 
-async function exchangeCodeForToken(code, clientId, clientSecret) {
-    const body = new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'authorization_code',
-        code,
-    });
+async function requestToken(params, clientId, clientSecret) {
+    const body = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, ...params });
 
     const res = await fetch('https://freesound.org/apiv2/oauth2/access_token/', {
         method: 'POST',
@@ -48,17 +47,62 @@ async function exchangeCodeForToken(code, clientId, clientSecret) {
         body,
     });
     if (!res.ok) {
-        throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+        throw new Error(`Token request failed: ${res.status} ${await res.text()}`);
     }
 
     const data = await res.json();
-    return data.access_token;
+    const token = {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        // refresh a minute early so a token never expires mid-run
+        expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+    };
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token, null, 2), { mode: 0o600 });
+    return token;
 }
 
-async function searchSounds(query, pageSize, accessToken) {
-    const url = new URL('https://freesound.org/apiv2/search/text/');
+function readCachedToken() {
+    try {
+        return JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+async function getAccessToken(rl, clientId, clientSecret) {
+    const cached = readCachedToken();
+
+    if (cached && Date.now() < cached.expiresAt) {
+        console.log('Using cached Freesound token.');
+        return cached.accessToken;
+    }
+
+    if (cached?.refreshToken) {
+        try {
+            console.log('Refreshing Freesound token...');
+            const token = await requestToken(
+                { grant_type: 'refresh_token', refresh_token: cached.refreshToken },
+                clientId,
+                clientSecret,
+            );
+            return token.accessToken;
+        } catch (err) {
+            console.warn(`Refresh failed, logging in again. (${err.message})`);
+        }
+    }
+
+    const code = await authorize(rl, clientId);
+    console.log('Exchanging code for access token...');
+    const token = await requestToken({ grant_type: 'authorization_code', code }, clientId, clientSecret);
+    return token.accessToken;
+}
+
+async function searchSounds(query, maxDuration, accessToken) {
+    const url = new URL('https://freesound.org/apiv2/search/');
     url.searchParams.set('query', query);
-    url.searchParams.set('page_size', String(pageSize));
+    url.searchParams.set('page_size', String(SEARCH_POOL_SIZE));
+    const durationFilter = maxDuration ? ` duration:[* TO ${maxDuration}]` : '';
+    url.searchParams.set('filter', QUALITY_FILTER + durationFilter);
     url.searchParams.set('fields', 'id,name,username,license,type');
 
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -68,6 +112,29 @@ async function searchSounds(query, pageSize, accessToken) {
 
     const data = await res.json();
     return data.results || [];
+}
+
+function readExistingBank(destDir) {
+    let credits = [];
+    try {
+        credits = JSON.parse(fs.readFileSync(path.join(destDir, 'credits.json'), 'utf8'));
+    } catch {}
+
+    const ids = new Set(credits.map((c) => c.id));
+    for (const file of fs.readdirSync(destDir)) {
+        const id = parseInt(file, 10);
+        if (!Number.isNaN(id)) ids.add(id);
+    }
+    return { credits, ids };
+}
+
+function pickRandom(items, n) {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, n);
 }
 
 async function downloadSound(sound, destDir, accessToken) {
@@ -92,35 +159,42 @@ async function main() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
     try {
-        const code = await authorize(rl, clientId);
-        console.log('Exchanging code for access token...');
-        const accessToken = await exchangeCodeForToken(code, clientId, clientSecret);
+        const accessToken = await getAccessToken(rl, clientId, clientSecret);
 
         const query = (await rl.question('Search terms: ')).trim();
         const directory = (await rl.question('Bank directory name: ')).trim();
         const countInput = (await rl.question('Number of samples to download [16]: ')).trim();
         const count = countInput ? parseInt(countInput, 10) : 16;
+        const maxDurationInput = (await rl.question('Max length in seconds [no limit]: ')).trim();
+        const maxDuration = maxDurationInput ? Number(maxDurationInput) : null;
 
         if (!query || !directory) {
             throw new Error('Search terms and directory name are required.');
         }
+        if (maxDuration !== null && !(maxDuration > 0)) {
+            throw new Error(`Max length must be a positive number of seconds, got "${maxDurationInput}".`);
+        }
 
         const destDir = path.join(__dirname, 'samples', 'freesound', directory);
-        if (fs.existsSync(destDir)) {
-            console.warn(`Warning: ${destDir} already exists. Matching files will be overwritten, but stale files from a previous run with different results will remain.`);
-        }
         fs.mkdirSync(destDir, { recursive: true });
+        const existing = readExistingBank(destDir);
+        if (existing.ids.size > 0) {
+            console.log(`Bank "${directory}" already has ${existing.ids.size} sound(s); those will be skipped.`);
+        }
 
         console.log(`Searching Freesound for "${query}"...`);
-        const results = await searchSounds(query, count, accessToken);
-        if (results.length === 0) {
-            console.log('No results found.');
+        const results = await searchSounds(query, maxDuration, accessToken);
+        const candidates = results.filter((sound) => !existing.ids.has(sound.id));
+        if (candidates.length === 0) {
+            console.log(results.length === 0 ? 'No results found.' : 'No new sounds left for this search in this bank.');
             return;
         }
-        console.log(`Found ${results.length} sound(s). Downloading...`);
 
-        const credits = [];
-        for (const sound of results) {
+        const picked = pickRandom(candidates, count);
+        console.log(`Picked ${picked.length} random sound(s) from ${candidates.length} new match(es). Downloading...`);
+
+        const credits = existing.credits;
+        for (const sound of picked) {
             const filename = await downloadSound(sound, destDir, accessToken);
             console.log(`Downloaded ${filename}`);
             credits.push({

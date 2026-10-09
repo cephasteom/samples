@@ -2,7 +2,7 @@
 
 Add samples in folders under `samples/`. Web browsers like wavs (only `.wav` and `.mp3` files are included in the manifest).
 
-Each folder becomes a bank. Nested folders produce dotted bank names, e.g. `samples/freesound/kicks/` becomes the bank `freesound.kicks`.
+Each folder becomes a bank. Nested folders produce dotted bank names, e.g. `samples/lw/kick/` becomes the bank `lw.kick`. Use nested folders rather than periods in folder names.
 
 ## Setup
 
@@ -41,7 +41,13 @@ node samplesToJSON.js --base http://localhost:8080/ --out mySamples.json
    Your Freesound app must have a redirect URI configured (any value works, e.g. `http://localhost:8080/callback`).
 2. Run `node freesound-samples.js`
 3. Open the printed URL, authorize the app, and paste the `code` param from the redirected URL's address bar
-4. Enter search terms, a bank name, and the number of samples (default 16)
+4. Enter search terms, a bank name, the number of samples (default 16), and optionally a max length in seconds
+
+Only WAV and FLAC files at 24-bit or higher and 44.1 kHz or higher are searched for. Freesound's own docs warn its bit depth data isn't fully reliable, so the occasional 16-bit file may still get through.
+
+Sounds are picked at random from the top 150 matches, so repeat runs give different results. Sounds already in the bank are skipped and `credits.json` is appended to, so running the same search into the same bank adds new sounds.
+
+Step 3 only happens on the first run: the token is cached in `.freesound-token.json` (gitignored) and refreshed automatically when it expires. Delete that file to force a fresh login.
 
 Check `credits.json` before using sounds - some Freesound licences require attribution or forbid commercial use.
 

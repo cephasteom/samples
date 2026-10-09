@@ -18,10 +18,10 @@ const { base, out } = parseArgs(process.argv.slice(2));
 const tree = dirTree("./samples");
 
 function formatItem(name, url) {
-    const [, ext] = name.split(".");
+    const ext = name.split(".").pop();
             const segments = url.split("/");
             const group = segments.slice(1, -1).join(".");
-            return ['wav', 'mp3'].includes(ext)
+            return ['wav', 'mp3', 'flac'].includes(ext)
                 ? { group, url }
                 : false;
 }

@@ -65,7 +65,7 @@ into any project directory next to `samplesToJSON.js`. Flow:
    persisting/refreshing tokens. (Flagged in critique below in case that tradeoff is wrong.)
 5. Prompt for: search terms, directory name (the bank name), number of samples (default 16, same cap the
    original ask).
-6. `GET https://freesound.org/apiv2/search/text/?query=<terms>&page_size=<n>&fields=id,name,username,license,type`
+6. `GET https://freesound.org/apiv2/search/?query=<terms>&page_size=<n>&fields=id,name,username,license,type`
    with `Authorization: Bearer <access_token>`.
 7. For each result: `GET https://freesound.org/apiv2/sounds/<id>/download/` with the same bearer header,
    stream the response to `samples/freesound/<directory>/<id>-<original filename>` (prefixing with the
