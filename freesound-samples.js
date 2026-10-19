@@ -175,7 +175,7 @@ async function main() {
             throw new Error(`Max length must be a positive number of seconds, got "${maxDurationInput}".`);
         }
 
-        const destDir = path.join(__dirname, 'samples', 'freesound', directory);
+        const destDir = path.join(__dirname, 'samples', 'fs', directory);
         fs.mkdirSync(destDir, { recursive: true });
         const existing = readExistingBank(destDir);
         if (existing.ids.size > 0) {

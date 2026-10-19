@@ -31,7 +31,7 @@ node samplesToJSON.js --base http://localhost:8080/ --out mySamples.json
 
 ## Downloading samples from Freesound
 
-`freesound-samples.js` searches [Freesound](https://freesound.org), downloads original-quality sounds into `samples/freesound/<bank>/`, writes a `credits.json` with attribution and licence info, then recompiles `samples.json`.
+`freesound-samples.js` searches [Freesound](https://freesound.org), downloads original-quality sounds into `samples/fs/<bank>/`, writes a `credits.json` with attribution and licence info, then recompiles `samples.json`.
 
 1. Create a `.env` file at the project root (gitignored):
    ```
